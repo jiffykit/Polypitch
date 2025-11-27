@@ -556,7 +556,7 @@ function makeRow(defaultVal) {
     const handleMouseMove = e => {
         if (!dragging) return;
         const rect = strip.getBoundingClientRect();
-        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+        const clientX = e.clientX;
         const deltaX = clientX - dragStartX;
         const deltaPct = -deltaX / rect.width; // Negative to reverse direction
         let newPhase = (dragStartPhase + deltaPct) % 1;
@@ -576,7 +576,7 @@ function makeRow(defaultVal) {
     };
     
     const handleTouchMove = e => {
-        if (!dragging) return;
+        if (!dragging || !e.touches || e.touches.length === 0) return;
         const rect = strip.getBoundingClientRect();
         const deltaX = e.touches[0].clientX - dragStartX;
         const deltaPct = -deltaX / rect.width;
@@ -595,6 +595,7 @@ function makeRow(defaultVal) {
         
         update();
         e.preventDefault();
+        e.stopPropagation();
     };
     
     const handleMouseUp = () => {
@@ -605,11 +606,12 @@ function makeRow(defaultVal) {
         }
     };
     
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('touchmove', handleTouchMove, { passive: false });
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('touchend', handleMouseUp);
-    document.addEventListener('touchcancel', handleMouseUp);
+    strip.addEventListener('mousemove', handleMouseMove);
+    strip.addEventListener('touchmove', handleTouchMove, { passive: false });
+    strip.addEventListener('mouseup', handleMouseUp);
+    strip.addEventListener('mouseleave', handleMouseUp);
+    strip.addEventListener('touchend', handleMouseUp, { passive: false });
+    strip.addEventListener('touchcancel', handleMouseUp, { passive: false });
 
     div.appendChild(controls);
     div.appendChild(strip);
