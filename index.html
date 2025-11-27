@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Polyrhythm Visualiser</title>
+<style>
+body { background:#111; color:#eee; font-family:sans-serif; padding:20px; }
+h2 { margin-bottom:0; }
+input[type=range] { width:100%; }
+.ratioRow { margin-bottom:14px; }
+.numBox { width:80px; }
+.dotStrip {
+    height:20px;
+    background:#222;
+    border-radius:4px;
+    position:relative;
+    margin-top:6px;
+}
+.dot {
+    width:6px; height:6px; border-radius:50%;
+    background:#0f0;
+    position:absolute;
+    top:7px;
+}
+button {
+    background:#333; color:#eee; border:1px solid #666;
+    padding:6px 12px; border-radius:6px; margin-top:10px;
+}
+</style>
+</head>
+<body>
+
+<h2>Polyrhythm → Pitch</h2>
+
+<div id="container"></div>
+<button id="addRow">Add Ratio</button>
+
+<br><br>
+<input id="speed" type="range" min="0" max="1" step="0.001" value="0">
+<p id="display">60 clicks per minute</p>
+<p><i>Tap anywhere to start audio</i></p>
+
+<script>
+const AC = window.AudioContext || window.webkitAudioContext;
+const ctx = new AC();
+
+// --- AUDIO ENGINE ---
+const bufferSize = 512;
+const impulseNodes = [];
+const impulseRates = [];
+
+function makeImpulseNode(index) {
+    const node = ctx.createScriptProcessor(bufferSize, 1, 1);
+    impulseRates[index] = 0;
+    let phase = 0;
+
+    node.onaudioprocess = e => {
+        const out = e.outputBuffer.getChannelData(0);
+        const rate = impulseRates[index];
+        if (!rate) { out.fill(0); return; }
+
+        const period = ctx.sampleRate / rate;
+
+        for (let i = 0; i < bufferSize; i++) {
+            let v = 0;
+            if (phase >= period) {
+                v = 1.0;
+                phase = 0;
+            }
+            out[i] = v;
+            phase++;
+        }
+    };
+
+    node.connect(ctx.destination);
+    impulseNodes[index] = node;
+}
+
+// --- CREATE UI ROW ---
+function makeRow(defaultVal) {
+    const container = document.getElementById("container");
+
+    const div = document.createElement("div");
+    div.className = "ratioRow";
+
+    const label = document.createElement("label");
+    label.innerText = "Ratio: ";
+
+    const box = document.createElement("input");
+    box.type = "number";
+    box.className = "numBox ratioBox";
+    box.value = defaultVal;
+
+    const strip = document.createElement("div");
+    strip.className = "dotStrip";
+
+    div.appendChild(label);
+    div.appendChild(box);
+    div.appendChild(strip);
+
+    container.appendChild(div);
+
+    box.addEventListener("input", update);
+
+    return div;
+}
+
+// Start with 4 rows
+for (let i = 1; i <= 4; i++) {
+    makeRow(i);
+    makeImpulseNode(i-1);
+}
+
+// Add unlimited rows
+document.getElementById("addRow").onclick = () => {
+    const count = document.querySelectorAll(".ratioRow").length;
+    makeRow(count + 1);
+    makeImpulseNode(count);
+    update();
+};
+
+// --- RATE MAPPING: 6 CPM (1Hz) → 440 Hz ---
+function sliderToBaseRate(x) {
+    const minRate = 0.1; // 1Hz = 6 CPM
+    const maxRate = 440;
+    return minRate * Math.pow(maxRate / minRate, x);
+}
+
+// --- VISUAL DOTS ---
+function drawDots(strip, ratio, baseRate) {
+    strip.innerHTML = "";
+    const voicesRate = baseRate * ratio;
+
+    const width = strip.clientWidth;
+    const duration = 1; // represent 1 second visually
+
+    const periodSec = 1 / voicesRate;
+    const count = Math.floor(duration / periodSec);
+
+    for (let i = 0; i < count; i++) {
+        const dot = document.createElement("div");
+        dot.className = "dot";
+        const x = (i * periodSec) * width;
+        dot.style.left = `${x}px`;
+        strip.appendChild(dot);
+    }
+}
+
+// --- UPDATE EVERYTHING ---
+function update() {
+    const base = sliderToBaseRate(parseFloat(speed.value));
+    const rows = [...document.querySelectorAll(".ratioRow")];
+
+    rows.forEach((row, i) => {
+        const box = row.querySelector(".ratioBox");
+        const strip = row.querySelector(".dotStrip");
+
+        const val = parseInt(box.value);
+        if (!isNaN(val) && val > 0) {
+            impulseRates[i] = base * val;
+            drawDots(strip, val, base);
+        } else {
+            impulseRates[i] = 0;
+            strip.innerHTML = "";
+        }
+    });
+
+    if (base <= 1.1) {
+        display.innerText = "60 clicks per minute";
+    } else {
+        display.innerText = `${base.toFixed(2)} Hz fundamental`;
+    }
+}
+
+speed.addEventListener("input", update);
+document.body.addEventListener("click", async () => {
+    if (ctx.state === "suspended") await ctx.resume();
+    update();
+});
+</script>
+
+</body>
+</html>
