@@ -2,56 +2,295 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Polyrhythm Visualiser</title>
+<title>Polyrhythm Visualizer</title>
 <style>
-body { background:#111; color:#eee; font-family:sans-serif; padding:20px; }
-h2 { margin-bottom:0; }
-input[type=range] { width:100%; }
-.ratioRow { margin-bottom:14px; }
-.numBox { width:80px; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    background: #111; 
+    color: #eee; 
+    font-family: 'Segoe UI', sans-serif; 
+    padding: 20px; 
+}
+.container { max-width: 1200px; margin: 0 auto; }
+h2 { 
+    margin-bottom: 20px; 
+    color: #0f0; 
+    text-shadow: 0 0 10px rgba(0,255,0,0.5);
+}
+h3 { color: #0f0; margin: 20px 0 10px; }
+
+/* Controls */
+.controls-section {
+    background: #1a1a1a;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+.preset-section {
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #333;
+}
+.preset-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 10px;
+}
+.preset-btn {
+    background: #2a2a2a;
+    color: #aaa;
+    border: 1px solid #444;
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+}
+.preset-btn:hover { background: #333; color: #0f0; }
+.midi-section {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+#midiStatus { 
+    color: #f44; 
+    font-size: 12px;
+}
+#midiStatus.connected { color: #0f0; }
+
+/* Ratio Rows */
+.ratioRow {
+    background: #1a1a1a;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+    border-left: 3px solid #0f0;
+}
+.row-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+.row-controls label {
+    font-size: 12px;
+    color: #aaa;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+input[type=number], select {
+    background: #222;
+    color: #eee;
+    border: 1px solid #444;
+    padding: 4px 8px;
+    border-radius: 4px;
+    width: 60px;
+}
+select { width: auto; min-width: 150px; }
+input[type=range] { 
+    width: 120px;
+    accent-color: #0f0;
+}
+.phase-val {
+    color: #0f0;
+    font-weight: bold;
+    min-width: 80px;
+    font-size: 11px;
+}
 .dotStrip {
-    height:20px;
-    background:#222;
-    border-radius:4px;
-    position:relative;
-    margin-top:6px;
+    height: 24px;
+    background: #222;
+    border-radius: 4px;
+    position: relative;
+    cursor: pointer;
+    overflow: hidden;
 }
 .dot {
-    width:6px; height:6px; border-radius:50%;
-    background:#0f0;
-    position:absolute;
-    top:7px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #0f0;
+    position: absolute;
+    top: 8.5px;
+    box-shadow: 0 0 5px rgba(0,255,0,0.6);
+    cursor: grab;
+    transition: background 0.2s;
 }
+.dot:hover { background: #0ff; }
+.dot:active { cursor: grabbing; }
+.remove-btn {
+    background: #d33;
+    color: #fff;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    margin-left: auto;
+}
+.remove-btn:hover { background: #f44; }
+
+/* Buttons */
 button {
-    background:#333; color:#eee; border:1px solid #666;
-    padding:6px 12px; border-radius:6px; margin-top:10px;
+    background: #333;
+    color: #eee;
+    border: 1px solid #666;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+}
+button:hover { background: #444; }
+
+/* Speed Control */
+.speed-section {
+    background: #1a1a1a;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 20px 0;
+}
+#speed { width: 100%; }
+#display {
+    text-align: center;
+    color: #0f0;
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+/* Stacked Visualization */
+.stack-viz {
+    background: #1a1a1a;
+    padding: 20px;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+#stackCanvas {
+    width: 100%;
+    height: 150px;
+    background: #0a0a0a;
+    border-radius: 4px;
+    display: block;
+}
+
+footer {
+    text-align: center;
+    margin-top: 30px;
+    color: #666;
+    font-size: 13px;
+    font-style: italic;
 }
 </style>
 </head>
 <body>
 
-<h2>Polyrhythm → Pitch</h2>
+<div class="container">
+<h2>Polyrhythm → Pitch Visualizer</h2>
+
+<div class="controls-section">
+    <div class="preset-section">
+        <label style="color:#aaa; font-size:13px; margin-bottom:5px; display:block;">Mathematical Sequence Presets:</label>
+        <div class="preset-buttons" id="presetButtons"></div>
+    </div>
+    
+    <div class="midi-section">
+        <button id="midiBtn">Connect MIDI</button>
+        <select id="midiOutput" disabled>
+            <option value="">-- Select MIDI Output --</option>
+        </select>
+        <span id="midiStatus">Not Connected</span>
+    </div>
+</div>
 
 <div id="container"></div>
-<button id="addRow">Add Ratio</button>
+<button id="addRow">+ Add Ratio Row</button>
+<button id="syncBtn" style="margin-left:10px;">⟲ Sync All Beat 1s</button>
 
-<br><br>
-<input id="speed" type="range" min="0" max="1" step="0.001" value="0">
-<p id="display">60 clicks per minute</p>
-<p><i>Tap anywhere to start audio</i></p>
+<div class="speed-section">
+    <label style="font-size:13px; color:#aaa;">Speed / Fundamental Frequency:</label>
+    <input id="speed" type="range" min="0" max="1" step="0.001" value="0.15">
+    <p id="display">60.0 BPM • 1.00 Hz</p>
+    
+    <div style="display:flex; gap:20px; margin-top:15px; padding-top:15px; border-top:1px solid #333;">
+        <div style="flex:1;">
+            <label style="font-size:13px; color:#aaa;">Impulse Width: <span id="widthDisplay">23</span> samples</label>
+            <input id="impulseWidthSlider" type="range" min="1" max="100" step="1" value="23" style="width:100%;">
+        </div>
+        <div style="flex:1;">
+            <label style="font-size:13px; color:#aaa;">Impulse Shape: <span id="shapeDisplay">spike</span></label>
+            <input id="impulseShapeSlider" type="range" min="0" max="1" step="0.01" value="0" style="width:100%;">
+        </div>
+    </div>
+</div>
+
+<div class="stack-viz">
+    <h3>Stacked Visualization</h3>
+    <canvas id="stackCanvas"></canvas>
+</div>
+
+<footer>
+    Click anywhere to start audio • Connect MIDI (e.g., loopMIDI) for external sync
+</footer>
+</div>
 
 <script>
+// ==================== AUDIO CONTEXT ====================
 const AC = window.AudioContext || window.webkitAudioContext;
 const ctx = new AC();
-
-// --- AUDIO ENGINE ---
 const bufferSize = 512;
 const impulseNodes = [];
 const impulseRates = [];
+const rowPhases = [];
+let impulseWidth = 1; // 1 to 100 samples
+let impulseShape = 0; // 0=spike, 0.5=bell/sine, 1=square
+let activePreset = null; // Track active sequence
+let activePresetBtn = null; // Track active button
+let sequenceIndex = 0; // Track position in sequence
 
+// ==================== MIDI ====================
+let midiOutput = null;
+let midiAccess = null;
+
+async function initMIDI() {
+    try {
+        midiAccess = await navigator.requestMIDIAccess();
+        const outputs = Array.from(midiAccess.outputs.values());
+        
+        const select = document.getElementById('midiOutput');
+        select.innerHTML = '<option value="">-- Select MIDI Output --</option>';
+        
+        outputs.forEach((output, i) => {
+            const opt = document.createElement('option');
+            opt.value = i;
+            opt.textContent = output.name;
+            select.appendChild(opt);
+        });
+        
+        select.disabled = false;
+        document.getElementById('midiStatus').textContent = 'MIDI Available';
+        document.getElementById('midiStatus').className = 'connected';
+        
+        select.onchange = () => {
+            const idx = parseInt(select.value);
+            if (!isNaN(idx)) {
+                midiOutput = outputs[idx];
+                document.getElementById('midiStatus').textContent = `Connected: ${midiOutput.name}`;
+            }
+        };
+    } catch (err) {
+        document.getElementById('midiStatus').textContent = 'MIDI Not Available';
+    }
+}
+
+document.getElementById('midiBtn').onclick = initMIDI;
+
+// ==================== AUDIO ENGINE ====================
 function makeImpulseNode(index) {
     const node = ctx.createScriptProcessor(bufferSize, 1, 1);
     impulseRates[index] = 0;
+    if (rowPhases[index] === undefined) rowPhases[index] = 0;
+    
     let phase = 0;
 
     node.onaudioprocess = e => {
@@ -60,13 +299,45 @@ function makeImpulseNode(index) {
         if (!rate) { out.fill(0); return; }
 
         const period = ctx.sampleRate / rate;
+        
+        // Apply phase offset
+        const phaseOffset = rowPhases[index] * period;
 
         for (let i = 0; i < bufferSize; i++) {
             let v = 0;
+            
+            // Precise trigger: reset exactly at period to prevent drift
             if (phase >= period) {
-                v = 1.0;
-                phase = 0;
+                phase = phase - period; // Maintain sub-sample precision
+                
+                // Send MIDI note OR audio impulse (not both)
+                if (midiOutput) {
+                    const midiNoteInput = document.querySelectorAll('.midiChannel')[index];
+                    const note = midiNoteInput ? parseInt(midiNoteInput.value) : 60 + index;
+                    midiOutput.send([0x90, note, 100]); // Note On
+                    setTimeout(() => midiOutput.send([0x80, note, 0]), 50); // Note Off
+                }
             }
+            
+            // Generate shaped impulse when MIDI is NOT connected
+            if (!midiOutput && phase < impulseWidth) {
+                const pos = phase / impulseWidth; // 0 to 1 within impulse
+                
+                if (impulseShape < 0.5) {
+                    // Spike to bell (0 to 0.5)
+                    const bellness = impulseShape * 2;
+                    const spike = 1.0 - pos;
+                    const bell = Math.sin(pos * Math.PI);
+                    v = (spike * (1 - bellness) + bell * bellness) * 0.25;
+                } else {
+                    // Bell to square (0.5 to 1)
+                    const squareness = (impulseShape - 0.5) * 2;
+                    const bell = Math.sin(pos * Math.PI);
+                    const square = 1.0;
+                    v = (bell * (1 - squareness) + square * squareness) * 0.25;
+                }
+            }
+            
             out[i] = v;
             phase++;
         }
@@ -76,107 +347,397 @@ function makeImpulseNode(index) {
     impulseNodes[index] = node;
 }
 
-// --- CREATE UI ROW ---
+// ==================== PRESETS ====================
+const presets = [
+    { name: "Fibonacci", fn: n => { const f=[1,1]; for(let i=2;i<n;i++) f[i]=f[i-1]+f[i-2]; return f; }},
+    { name: "Lucas", fn: n => { const f=[2,1]; for(let i=2;i<n;i++) f[i]=f[i-1]+f[i-2]; return f; }},
+    { name: "Tribonacci", fn: n => { const f=[1,1,2]; for(let i=3;i<n;i++) f[i]=f[i-1]+f[i-2]+f[i-3]; return f; }},
+    { name: "Primes", fn: n => { const p=[2,3,5,7,11,13,17,19,23,29,31,37,41,43,47]; return p.slice(0,n); }},
+    { name: "Powers of 2", fn: n => Array.from({length:n}, (_,i)=>Math.pow(2,i)) },
+    { name: "Triangular", fn: n => Array.from({length:n}, (_,i)=>(i+1)*(i+2)/2) },
+    { name: "Pell", fn: n => { const f=[1,2]; for(let i=2;i<n;i++) f[i]=2*f[i-1]+f[i-2]; return f; }},
+    { name: "Catalan", fn: n => { const c=[1,1,2,5,14,42,132,429,1430,4862]; return c.slice(0,n); }},
+    { name: "Padovan", fn: n => { const f=[1,1,1]; for(let i=3;i<n;i++) f[i]=f[i-2]+f[i-3]; return f; }},
+    { name: "Jacobsthal", fn: n => { const f=[0,1]; for(let i=2;i<n;i++) f[i]=f[i-1]+2*f[i-2]; return f; }},
+    { name: "Bell", fn: n => { const b=[1,1,2,5,15,52,203,877,4140]; return b.slice(0,n); }},
+    { name: "Partition", fn: n => { const p=[1,1,2,3,5,7,11,15,22,30,42]; return p.slice(0,n); }},
+    { name: "Lazy Caterer", fn: n => Array.from({length:n}, (_,i)=>1+(i+1)*(i+2)/2) },
+    { name: "Natural", fn: n => Array.from({length:n}, (_,i)=>i+1) },
+    { name: "Squares", fn: n => Array.from({length:n}, (_,i)=>(i+1)*(i+1)) }
+];
+
+const presetBtns = document.getElementById('presetButtons');
+presets.forEach(preset => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn';
+    btn.textContent = preset.name;
+    btn.onclick = () => {
+        // Highlight active button
+        if (activePresetBtn) activePresetBtn.style.background = '#2a2a2a';
+        btn.style.background = '#0a5';
+        activePresetBtn = btn;
+        activePreset = preset;
+        loadPreset(preset);
+    };
+    presetBtns.appendChild(btn);
+});
+
+function loadPreset(preset) {
+    const container = document.getElementById('container');
+    container.innerHTML = '';
+    impulseNodes.length = 0;
+    impulseRates.length = 0;
+    rowPhases.length = 0;
+    
+    const values = preset.fn(6);
+    sequenceIndex = values.length;
+    values.forEach((val, i) => {
+        makeRow(val);
+        makeImpulseNode(i);
+    });
+    update();
+}
+
+// ==================== ROW CREATION ====================
 function makeRow(defaultVal) {
-    const container = document.getElementById("container");
+    const container = document.getElementById('container');
+    const index = document.querySelectorAll('.ratioRow').length;
 
-    const div = document.createElement("div");
-    div.className = "ratioRow";
+    const div = document.createElement('div');
+    div.className = 'ratioRow';
 
-    const label = document.createElement("label");
-    label.innerText = "Ratio: ";
+    const controls = document.createElement('div');
+    controls.className = 'row-controls';
 
-    const box = document.createElement("input");
-    box.type = "number";
-    box.className = "numBox ratioBox";
-    box.value = defaultVal;
+    // Ratio input
+    const ratioLabel = document.createElement('label');
+    ratioLabel.innerHTML = `Ratio:`;
+    const ratioBox = document.createElement('input');
+    ratioBox.type = 'number';
+    ratioBox.className = 'ratioBox';
+    ratioBox.value = defaultVal;
+    ratioBox.min = 1;
+    ratioLabel.appendChild(ratioBox);
 
-    const strip = document.createElement("div");
-    strip.className = "dotStrip";
+    // Phase display (no slider)
+    const phaseLabel = document.createElement('label');
+    phaseLabel.innerHTML = `Phase:`;
+    
+    const phaseVal = document.createElement('span');
+    phaseVal.className = 'phase-val';
+    phaseVal.textContent = '0.0% (drag dot)';
+    
+    // MIDI Channel
+    const midiLabel = document.createElement('label');
+    midiLabel.innerHTML = `Note:`;
+    const midiNote = document.createElement('input');
+    midiNote.type = 'number';
+    midiNote.className = 'midiChannel';
+    midiNote.value = 60 + index;
+    midiNote.min = 0;
+    midiNote.max = 127;
+    midiLabel.appendChild(midiNote);
 
-    div.appendChild(label);
-    div.appendChild(box);
+    // Remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'remove-btn';
+    removeBtn.textContent = '×';
+    removeBtn.onclick = () => {
+        div.remove();
+        update();
+    };
+
+    controls.appendChild(ratioLabel);
+    controls.appendChild(phaseLabel);
+    controls.appendChild(phaseVal);
+    controls.appendChild(midiLabel);
+    controls.appendChild(removeBtn);
+
+    // Dot strip
+    const strip = document.createElement('div');
+    strip.className = 'dotStrip';
+    
+    // Drag phase control
+    let dragging = false;
+    let dragStartX = 0;
+    let dragStartPhase = 0;
+    
+    strip.addEventListener('dblclick', e => {
+        // Double-click to reset phase to 0 and realign beat 1
+        rowPhases[index] = 0;
+        phaseVal.textContent = '0.0% (drag dot)';
+        
+        // Disconnect and recreate all audio nodes to resync
+        impulseNodes.forEach((node, i) => {
+            if (node) {
+                node.disconnect();
+            }
+        });
+        
+        // Recreate all nodes to ensure beat 1 alignment
+        impulseNodes.length = 0;
+        const rows = document.querySelectorAll('.ratioRow');
+        rows.forEach((row, i) => {
+            makeImpulseNode(i);
+            const box = row.querySelector('.ratioBox');
+            const val = parseInt(box.value);
+            if (!isNaN(val) && val > 0) {
+                impulseRates[i] = sliderToBaseRate(parseFloat(speed.value)) * val;
+            }
+        });
+        
+        update();
+        e.preventDefault();
+    });
+    
+    strip.addEventListener('mousedown', e => {
+        const rect = strip.getBoundingClientRect();
+        dragging = true;
+        dragStartX = e.clientX;
+        dragStartPhase = rowPhases[index] || 0;
+        strip.style.cursor = 'grabbing';
+        e.preventDefault();
+    });
+    
+    const handleMouseMove = e => {
+        if (!dragging) return;
+        const rect = strip.getBoundingClientRect();
+        const deltaX = e.clientX - dragStartX;
+        const deltaPct = -deltaX / rect.width; // Negative to reverse direction
+        let newPhase = (dragStartPhase + deltaPct) % 1;
+        if (newPhase < 0) newPhase += 1;
+        
+        rowPhases[index] = newPhase;
+        phaseVal.textContent = `${(newPhase * 100).toFixed(1)}% (drag dot)`;
+        
+        // Recreate audio node to apply phase
+        if (impulseNodes[index]) {
+            impulseNodes[index].disconnect();
+            makeImpulseNode(index);
+            impulseRates[index] = sliderToBaseRate(parseFloat(speed.value)) * parseInt(ratioBox.value);
+        }
+        
+        update();
+    };
+    
+    const handleMouseUp = () => {
+        if (dragging) {
+            dragging = false;
+            strip.style.cursor = 'pointer';
+        }
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    div.appendChild(controls);
     div.appendChild(strip);
-
     container.appendChild(div);
 
-    box.addEventListener("input", update);
+    // Event listeners
+    ratioBox.addEventListener('input', update);
 
     return div;
 }
 
-// Start with 4 rows
-for (let i = 1; i <= 4; i++) {
-    makeRow(i);
-    makeImpulseNode(i-1);
-}
+// Initialize with 2:3 polyrhythm
+makeRow(2);
+makeImpulseNode(0);
+makeRow(3);
+makeImpulseNode(1);
 
-// Add unlimited rows
-document.getElementById("addRow").onclick = () => {
-    const count = document.querySelectorAll(".ratioRow").length;
-    makeRow(count + 1);
+document.getElementById('addRow').onclick = () => {
+    const count = document.querySelectorAll('.ratioRow').length;
+    let nextVal = count + 1;
+    
+    // If a sequence is active, use the next number in sequence
+    if (activePreset) {
+        const sequence = activePreset.fn(sequenceIndex + 2);
+        nextVal = sequence[sequenceIndex] || sequenceIndex + 1;
+        sequenceIndex++;
+    }
+    
+    makeRow(nextVal);
     makeImpulseNode(count);
     update();
 };
 
-// --- RATE MAPPING: 6 CPM (1Hz) → 440 Hz ---
+// ==================== RATE MAPPING ====================
 function sliderToBaseRate(x) {
-    const minRate = 0.1; // 1Hz = 6 CPM
+    const minRate = 0.1;
     const maxRate = 440;
     return minRate * Math.pow(maxRate / minRate, x);
 }
 
-// --- VISUAL DOTS ---
-function drawDots(strip, ratio, baseRate) {
-    strip.innerHTML = "";
-    const voicesRate = baseRate * ratio;
-
+// ==================== VISUAL DOTS ====================
+function drawDots(strip, ratio, baseRate, phase) {
+    strip.innerHTML = '';
     const width = strip.clientWidth;
-    const duration = 1; // represent 1 second visually
-
-    const periodSec = 1 / voicesRate;
-    const count = Math.floor(duration / periodSec);
-
-    for (let i = 0; i < count; i++) {
-        const dot = document.createElement("div");
-        dot.className = "dot";
-        const x = (i * periodSec) * width;
-        dot.style.left = `${x}px`;
-        strip.appendChild(dot);
+    const duration = 1; // 1 second window
+    
+    // For a polyrhythm, ratio tells us how many beats in that time window
+    const beatsPerSecond = ratio;
+    const spacing = 1 / beatsPerSecond; // time between beats
+    const phaseOffset = phase * spacing;
+    
+    // Draw dots evenly spaced
+    for (let i = 0; i < Math.ceil(beatsPerSecond * duration) + 1; i++) {
+        const t = i * spacing - phaseOffset;
+        if (t >= 0 && t < duration) {
+            const dot = document.createElement('div');
+            dot.className = 'dot';
+            dot.style.left = `${(t / duration) * width}px`;
+            strip.appendChild(dot);
+        }
     }
 }
 
-// --- UPDATE EVERYTHING ---
+// ==================== STACKED VISUALIZATION ====================
+function drawStackedView() {
+    const canvas = document.getElementById('stackCanvas');
+    const ctx2d = canvas.getContext('2d');
+    
+    // Set canvas size
+    canvas.width = canvas.offsetWidth;
+    canvas.height = 150;
+    
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const base = sliderToBaseRate(parseFloat(speed.value));
+    const rows = [...document.querySelectorAll('.ratioRow')];
+    const duration = 2; // show 2 seconds
+    const dotSize = 4;
+    const baseY = canvas.height - 20;
+    
+    // Collect all dot positions
+    const allDots = [];
+    rows.forEach((row, i) => {
+        const box = row.querySelector('.ratioBox');
+        const val = parseInt(box.value);
+        if (isNaN(val) || val <= 0) return;
+        
+        const rate = base * val;
+        const period = 1 / rate;
+        const phase = rowPhases[i] || 0;
+        const phaseOffset = phase * period;
+        const count = Math.ceil(duration / period) + 2;
+        
+        for (let j = 0; j < count; j++) {
+            const t = j * period - phaseOffset;
+            if (t >= 0 && t < duration) {
+                const x = (t / duration) * canvas.width;
+                allDots.push({ x, row: i });
+            }
+        }
+    });
+    
+    // Sort by x position
+    allDots.sort((a, b) => a.x - b.x);
+    
+    // Stack dots
+    const occupied = [];
+    allDots.forEach(dot => {
+        let y = 0;
+        const xPos = Math.round(dot.x);
+        
+        // Find available height
+        while (occupied[xPos * 100 + y]) {
+            y++;
+        }
+        
+        occupied[xPos * 100 + y] = true;
+        
+        // Draw dot
+        ctx2d.fillStyle = '#0f0';
+        ctx2d.shadowBlur = 6;
+        ctx2d.shadowColor = 'rgba(0,255,0,0.6)';
+        ctx2d.beginPath();
+        ctx2d.arc(dot.x, baseY - y * (dotSize + 2), dotSize/2, 0, Math.PI * 2);
+        ctx2d.fill();
+    });
+    
+    // Draw baseline
+    ctx2d.shadowBlur = 0;
+    ctx2d.strokeStyle = '#333';
+    ctx2d.lineWidth = 1;
+    ctx2d.beginPath();
+    ctx2d.moveTo(0, baseY);
+    ctx2d.lineTo(canvas.width, baseY);
+    ctx2d.stroke();
+}
+
+// ==================== UPDATE ====================
 function update() {
     const base = sliderToBaseRate(parseFloat(speed.value));
-    const rows = [...document.querySelectorAll(".ratioRow")];
+    const rows = [...document.querySelectorAll('.ratioRow')];
 
     rows.forEach((row, i) => {
-        const box = row.querySelector(".ratioBox");
-        const strip = row.querySelector(".dotStrip");
-
+        const box = row.querySelector('.ratioBox');
+        const strip = row.querySelector('.dotStrip');
         const val = parseInt(box.value);
+        const phase = rowPhases[i] || 0;
+
         if (!isNaN(val) && val > 0) {
             impulseRates[i] = base * val;
-            drawDots(strip, val, base);
+            drawDots(strip, val, base, phase);
         } else {
             impulseRates[i] = 0;
-            strip.innerHTML = "";
+            strip.innerHTML = '';
         }
     });
 
-    if (base <= 1.1) {
-        display.innerText = "60 clicks per minute";
-    } else {
-        display.innerText = `${base.toFixed(2)} Hz fundamental`;
-    }
+    const bpm = (base * 60).toFixed(1);
+    const hz = base.toFixed(2);
+    display.innerText = `${bpm} BPM • ${hz} Hz`;
+    
+    drawStackedView();
 }
 
-speed.addEventListener("input", update);
-document.body.addEventListener("click", async () => {
-    if (ctx.state === "suspended") await ctx.resume();
+// ==================== EVENTS ====================
+// Sync button - realign all beat 1s
+document.getElementById('syncBtn').onclick = () => {
+    // Disconnect all audio nodes
+    impulseNodes.forEach((node, i) => {
+        if (node) node.disconnect();
+    });
+    
+    // Recreate all nodes to resync
+    impulseNodes.length = 0;
+    const rows = document.querySelectorAll('.ratioRow');
+    rows.forEach((row, i) => {
+        makeImpulseNode(i);
+        const box = row.querySelector('.ratioBox');
+        const val = parseInt(box.value);
+        if (!isNaN(val) && val > 0) {
+            impulseRates[i] = sliderToBaseRate(parseFloat(speed.value)) * val;
+        }
+    });
+    
+    update();
+};
+
+speed.addEventListener('input', update);
+window.addEventListener('resize', update);
+
+document.getElementById('impulseWidthSlider').addEventListener('input', e => {
+    impulseWidth = parseInt(e.target.value);
+    document.getElementById('widthDisplay').textContent = impulseWidth;
+});
+
+document.getElementById('impulseShapeSlider').addEventListener('input', e => {
+    impulseShape = parseFloat(e.target.value);
+    const labels = ['spike', 'spike-bell', 'bell', 'bell-square', 'square'];
+    const idx = Math.floor(impulseShape * 4);
+    document.getElementById('shapeDisplay').textContent = labels[idx];
+});
+
+document.body.addEventListener('click', async () => {
+    if (ctx.state === 'suspended') await ctx.resume();
     update();
 });
+
+// Initial update
+update();
 </script>
 
 </body>
