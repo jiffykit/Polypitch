@@ -606,12 +606,11 @@ function makeRow(defaultVal) {
         }
     };
     
-    strip.addEventListener('mousemove', handleMouseMove);
-    strip.addEventListener('touchmove', handleTouchMove, { passive: false });
-    strip.addEventListener('mouseup', handleMouseUp);
-    strip.addEventListener('mouseleave', handleMouseUp);
-    strip.addEventListener('touchend', handleMouseUp, { passive: false });
-    strip.addEventListener('touchcancel', handleMouseUp, { passive: false });
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchend', handleMouseUp);
+    document.addEventListener('touchcancel', handleMouseUp);
 
     div.appendChild(controls);
     div.appendChild(strip);
@@ -820,6 +819,24 @@ document.getElementById('impulseShapeSlider').addEventListener('input', e => {
 document.body.addEventListener('click', async (e) => {
     // Don't resume if we're dragging
     if (isDraggingAnyStrip) return;
+    
+    // Check if click is on a dot strip - ignore it
+    if (e.target.closest('.dotStrip')) return;
+    
+    if (ctx.state === 'suspended') {
+        await ctx.resume();
+        // Add 200ms delay before first beat for perfect sync
+        audioStartTime = ctx.currentTime + 0.2;
+    }
+    update();
+});
+
+document.body.addEventListener('touchend', async (e) => {
+    // Don't resume if we're dragging
+    if (isDraggingAnyStrip) return;
+    
+    // Check if touch is on a dot strip - ignore it
+    if (e.target.closest('.dotStrip')) return;
     
     if (ctx.state === 'suspended') {
         await ctx.resume();
