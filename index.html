@@ -247,6 +247,9 @@ let impulseShape = 0; // 0=spike, 0.5=bell/sine, 1=square
 let activePreset = null; // Track active sequence
 let activePresetBtn = null; // Track active button
 let sequenceIndex = 0; // Track position in sequence
+let isDraggingAnyStrip = false; // Global drag state
+let audioStartTime = 0; // Track when audio should start
+let globalSampleCount = 0; // Shared sample counter for perfect sync
 
 // ==================== MIDI ====================
 let midiOutput = null;
@@ -291,7 +294,7 @@ function makeImpulseNode(index) {
     impulseRates[index] = 0;
     if (rowPhases[index] === undefined) rowPhases[index] = 0;
     
-    let phase = 0;
+    let lastTriggerSample = -1000000; // Track last trigger to prevent duplicates
 
     node.onaudioprocess = e => {
         const out = e.outputBuffer.getChannelData(0);
@@ -302,25 +305,37 @@ function makeImpulseNode(index) {
         
         // Apply phase offset
         const phaseOffset = rowPhases[index] * period;
+        
+        // Check if audio should be playing yet
+        const now = ctx.currentTime;
+        const shouldPlay = now >= audioStartTime;
 
         for (let i = 0; i < bufferSize; i++) {
             let v = 0;
             
-            // Precise trigger: reset exactly at period to prevent drift
-            if (phase >= period) {
-                phase = phase - period; // Maintain sub-sample precision
+            // Use global sample counter for perfect sync across all rows
+            const currentSample = globalSampleCount + i;
+            const adjustedSample = currentSample + phaseOffset;
+            const phase = adjustedSample % period;
+            
+            // Trigger on period boundaries
+            if (phase < 1 && (currentSample - lastTriggerSample) >= period * 0.9) {
+                lastTriggerSample = currentSample;
                 
-                // Send MIDI note OR audio impulse (not both)
-                if (midiOutput) {
-                    const midiNoteInput = document.querySelectorAll('.midiChannel')[index];
-                    const note = midiNoteInput ? parseInt(midiNoteInput.value) : 60 + index;
-                    midiOutput.send([0x90, note, 100]); // Note On
-                    setTimeout(() => midiOutput.send([0x80, note, 0]), 50); // Note Off
+                // Only play if start time has passed
+                if (shouldPlay) {
+                    // Send MIDI note OR audio impulse (not both)
+                    if (midiOutput) {
+                        const midiNoteInput = document.querySelectorAll('.midiChannel')[index];
+                        const note = midiNoteInput ? parseInt(midiNoteInput.value) : 60 + index;
+                        midiOutput.send([0x90, note, 100]); // Note On
+                        setTimeout(() => midiOutput.send([0x80, note, 0]), 50); // Note Off
+                    }
                 }
             }
             
-            // Generate shaped impulse when MIDI is NOT connected
-            if (!midiOutput && phase < impulseWidth) {
+            // Generate shaped impulse when MIDI is NOT connected and start time has passed
+            if (!midiOutput && shouldPlay && phase < impulseWidth) {
                 const pos = phase / impulseWidth; // 0 to 1 within impulse
                 
                 if (impulseShape < 0.5) {
@@ -339,7 +354,11 @@ function makeImpulseNode(index) {
             }
             
             out[i] = v;
-            phase++;
+        }
+        
+        // Increment global sample counter (only once per buffer, from the first node)
+        if (index === 0) {
+            globalSampleCount += bufferSize;
         }
     };
 
@@ -371,12 +390,33 @@ presets.forEach(preset => {
     const btn = document.createElement('button');
     btn.className = 'preset-btn';
     btn.textContent = preset.name;
-    btn.onclick = () => {
+    btn.onclick = async () => {
         // Highlight active button
         if (activePresetBtn) activePresetBtn.style.background = '#2a2a2a';
         btn.style.background = '#0a5';
         activePresetBtn = btn;
         activePreset = preset;
+        
+        // Disconnect and clear all existing audio nodes
+        impulseNodes.forEach((node, i) => {
+            if (node) node.disconnect();
+        });
+        impulseNodes.length = 0;
+        impulseRates.length = 0;
+        rowPhases.length = 0;
+        
+        // Reset global sample counter
+        globalSampleCount = 0;
+        
+        // Resume audio context if needed
+        if (ctx.state === 'suspended') {
+            await ctx.resume();
+            // Add delay for sync
+            audioStartTime = ctx.currentTime + 0.2;
+        } else {
+            audioStartTime = ctx.currentTime + 0.2;
+        }
+        
         loadPreset(preset);
     };
     presetBtns.appendChild(btn);
@@ -490,19 +530,34 @@ function makeRow(defaultVal) {
         e.preventDefault();
     });
     
+    // Mouse events
     strip.addEventListener('mousedown', e => {
         const rect = strip.getBoundingClientRect();
         dragging = true;
+        isDraggingAnyStrip = true;
         dragStartX = e.clientX;
         dragStartPhase = rowPhases[index] || 0;
         strip.style.cursor = 'grabbing';
         e.preventDefault();
+        e.stopPropagation();
     });
+    
+    // Touch events
+    strip.addEventListener('touchstart', e => {
+        const rect = strip.getBoundingClientRect();
+        dragging = true;
+        isDraggingAnyStrip = true;
+        dragStartX = e.touches[0].clientX;
+        dragStartPhase = rowPhases[index] || 0;
+        e.preventDefault();
+        e.stopPropagation();
+    }, { passive: false });
     
     const handleMouseMove = e => {
         if (!dragging) return;
         const rect = strip.getBoundingClientRect();
-        const deltaX = e.clientX - dragStartX;
+        const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+        const deltaX = clientX - dragStartX;
         const deltaPct = -deltaX / rect.width; // Negative to reverse direction
         let newPhase = (dragStartPhase + deltaPct) % 1;
         if (newPhase < 0) newPhase += 1;
@@ -520,15 +575,41 @@ function makeRow(defaultVal) {
         update();
     };
     
+    const handleTouchMove = e => {
+        if (!dragging) return;
+        const rect = strip.getBoundingClientRect();
+        const deltaX = e.touches[0].clientX - dragStartX;
+        const deltaPct = -deltaX / rect.width;
+        let newPhase = (dragStartPhase + deltaPct) % 1;
+        if (newPhase < 0) newPhase += 1;
+        
+        rowPhases[index] = newPhase;
+        phaseVal.textContent = `${(newPhase * 100).toFixed(1)}% (drag dot)`;
+        
+        // Recreate audio node to apply phase
+        if (impulseNodes[index]) {
+            impulseNodes[index].disconnect();
+            makeImpulseNode(index);
+            impulseRates[index] = sliderToBaseRate(parseFloat(speed.value)) * parseInt(ratioBox.value);
+        }
+        
+        update();
+        e.preventDefault();
+    };
+    
     const handleMouseUp = () => {
         if (dragging) {
             dragging = false;
+            isDraggingAnyStrip = false;
             strip.style.cursor = 'pointer';
         }
     };
     
     document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
     document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchend', handleMouseUp);
+    document.addEventListener('touchcancel', handleMouseUp);
 
     div.appendChild(controls);
     div.appendChild(strip);
@@ -696,6 +777,9 @@ function update() {
 // ==================== EVENTS ====================
 // Sync button - realign all beat 1s
 document.getElementById('syncBtn').onclick = () => {
+    // Reset global sample counter for perfect resync
+    globalSampleCount = 0;
+    
     // Disconnect all audio nodes
     impulseNodes.forEach((node, i) => {
         if (node) node.disconnect();
@@ -731,8 +815,15 @@ document.getElementById('impulseShapeSlider').addEventListener('input', e => {
     document.getElementById('shapeDisplay').textContent = labels[idx];
 });
 
-document.body.addEventListener('click', async () => {
-    if (ctx.state === 'suspended') await ctx.resume();
+document.body.addEventListener('click', async (e) => {
+    // Don't resume if we're dragging
+    if (isDraggingAnyStrip) return;
+    
+    if (ctx.state === 'suspended') {
+        await ctx.resume();
+        // Add 200ms delay before first beat for perfect sync
+        audioStartTime = ctx.currentTime + 0.2;
+    }
     update();
 });
 
